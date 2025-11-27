@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Clipboard from '@react-native-clipboard/clipboard'; 
+import { SettingModel } from '../services/database/models/setting';
 
 const CHECK_INTERVAL = 500;
 
@@ -20,6 +21,8 @@ export const useClipboard = ({ onNewClipFound }) => {
 	const [isCopied, setIsCopied] = useState(false);
 	const [hasContent, setHasContent] = useState(false);
 
+	const [clipboardInterval,setClipboardInterval]=useState(CHECK_INTERVAL)
+
 
 	const readText = useCallback(async () => {
 		try {
@@ -34,6 +37,20 @@ export const useClipboard = ({ onNewClipFound }) => {
 	}, []);
 
 	useEffect(() => {
+			const loadSettings = async () => {
+				try {
+					const interval = await SettingModel.get('clipboard_check_interval');
+					if (interval) {
+						setClipboardInterval(interval);
+					}
+				} catch (e) {
+					console.error("Erreur lors du chargement des paramètres:", e);
+				}
+			};
+			loadSettings();
+	}, []);
+
+	useEffect(() => {
 		readText();
 	}, [readText]);
 
@@ -42,6 +59,7 @@ export const useClipboard = ({ onNewClipFound }) => {
 		Clipboard.setString(text);    
 		setLastCachedClip(text);     
 		setIsCopied(true);
+
 		setTimeout(() => setIsCopied(false), 1500);
 
 	setHasContent(!!text); 
@@ -76,7 +94,7 @@ export const useClipboard = ({ onNewClipFound }) => {
 	}, [lastCachedClip]); 
 
 	useEffect(() => {
-		const intervalId = setInterval(checkClipboardForNewContent, CHECK_INTERVAL);
+		const intervalId = setInterval(checkClipboardForNewContent, clipboardInterval);
 		return () => clearInterval(intervalId);
 	}, [checkClipboardForNewContent]); 
 
