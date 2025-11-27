@@ -6,6 +6,9 @@ import { SIZES } from '../theme/colors';
 import Header from '../components/common/Header';
 import Icon from 'react-native-vector-icons/Ionicons';
 
+import { useClipboard } from '../hooks/useClipboard';
+import { ClipboardModel } from '../services/database/models/clipboard';
+
 /**
  * Écran pour afficher le contenu complet d'un clip.
  * @param {Object} props
@@ -74,8 +77,10 @@ const ClipDetailScreen = ({ onBack, clip, onEdit }) => {
 		}
 	});
 
+	const { writeText } = useClipboard({onNewClipFound: ()=>{} });
+	
 	const handleCopy = () => {
-		console.log(`Copie du contenu du clip ${clip.id}`);
+		writeText(clip.content)
 	};
 
 	const handleShare = () => {
@@ -89,7 +94,7 @@ const ClipDetailScreen = ({ onBack, clip, onEdit }) => {
 	};
 
 	const handleDelete = () => {
-		// Logique de suppression
+		ClipboardModel.softDelete(clip.id)
 		console.log(`Suppression du clip ${clip.id}`);
 		onBack(); // Retourner après suppression
 	};
@@ -103,7 +108,7 @@ const ClipDetailScreen = ({ onBack, clip, onEdit }) => {
 	return (
 		<View style={styles.container}>
 			<Header 
-				title="Détail du Clip" 
+				title="Clip" 
 				onBack={onBack}
 				// RightComponent={renderHeaderRight()}
 			/>
