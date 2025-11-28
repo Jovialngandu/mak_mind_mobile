@@ -133,10 +133,7 @@ const SettingsScreen = ({ onBack, onExportPress }) => {
 				return;
 			}
 			
-			// Sauvegarde de l'intervalle du Watcher
 			await SettingModel.set('clipboard_check_interval', watcherInterval);
-			
-			// Le thème est déjà géré par toggleTheme, pas besoin de le sauvegarder ici.
 			
 			setSaveMessage('Modifications sauvegardées avec succès !');
 
@@ -145,7 +142,6 @@ const SettingsScreen = ({ onBack, onExportPress }) => {
 			setSaveMessage('Échec de la sauvegarde. Voir la console pour les détails.');
 		} finally {
 			setIsSaving(false);
-			// Effacer le message après un court délai
 			setTimeout(() => setSaveMessage(null), 3000);
 		}
 	};
@@ -161,7 +157,7 @@ const SettingsScreen = ({ onBack, onExportPress }) => {
 			<Header 
 				title="Paramètres" 
 				onBack={onBack}
-				RightComponent={renderHeaderRight()}
+				// RightComponent={renderHeaderRight()}
 			/>
 
 			<ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -176,6 +172,7 @@ const SettingsScreen = ({ onBack, onExportPress }) => {
 						keyboardType="numeric"
 						placeholder="1000"
 						placeholderTextColor={theme.textSecondary}
+					
 					/>
 					<Text style={styles.hintText}>
 						Fréquence de vérification du presse-papier (1000ms = 1 seconde).

@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Switch } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { SIZES } from '../theme/colors';
 import Header from '../components/common/Header';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {ClipboardModel} from '../services/database/models/clipboard';
+import {convertToCSV,convertToJSON,requestStoragePermission,saveFile} from '../helpers/utils'
 
 /**
  * Écran pour gérer l'exportation de l'historique des clips.
@@ -12,10 +14,18 @@ import Icon from 'react-native-vector-icons/Ionicons';
  * @param {function} props.onBack Fonction pour revenir à l'écran précédent.
  */
 const ExportHistoryScreen = ({ onBack }) => {
-    const { theme } = useTheme();
+	const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const [exportFormat, setExportFormat] = useState('JSON'); // 'JSON' ou 'CSV'
     const [includeMetadata, setIncludeMetadata] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
+    const isMounted = useRef(true);
+
+    useEffect(() => {
+        return () => {
+            isMounted.current = false;
+        };
+    }, []);
 
     const styles = StyleSheet.create({
         container: {
@@ -24,7 +34,7 @@ const ExportHistoryScreen = ({ onBack }) => {
         },
         scrollContainer: {
             padding: SIZES.padding,
-            paddingBottom: insets.bottom + 80, // Espace pour le bouton d'export fixe
+            paddingBottom: insets.bottom + 80,
         },
         searchRow: {
             flexDirection: 'row',
@@ -120,6 +130,10 @@ const ExportHistoryScreen = ({ onBack }) => {
             backgroundColor: theme.primary,
             paddingVertical: 14,
             borderRadius: SIZES.radius,
+            opacity: 1,
+        },
+        exportButtonDisabled: {
+            opacity: 0.6,
         },
         exportButtonText: {
             fontSize: 16,
@@ -129,37 +143,79 @@ const ExportHistoryScreen = ({ onBack }) => {
         }
     });
 
-    const handleExport = () => {
-        // Logique d'exportation avec les options sélectionnées
-        console.log(`Démarrage de l'export en ${exportFormat}. Inclure métadonnées: ${includeMetadata}`);
+
+    const showAlert = (title, message, buttons = [{ text: 'OK' }]) => {
+        if (isMounted.current) {
+            setTimeout(() => {
+                if (isMounted.current) {
+                    Alert.alert(title, message, buttons);
+                }
+            }, 100);
+        }
+    };
+
+    const handleExport = async () => {
+        if (isExporting) return;
+        
+        setIsExporting(true);
+        
+        try {
+            if (!isMounted.current) return;
+
+            const clipDatas = await ClipboardModel.findAll();
+            
+            if (!clipDatas || clipDatas.length === 0) {
+                showAlert('Aucune donnée', 'Aucun clip à exporter');
+                return;
+            }
+
+            const hasPermission = await requestStoragePermission();
+            if (!hasPermission) {
+                showAlert('Permission refusée', 'Impossible d\'exporter sans permission de stockage');
+                return;
+            }
+
+            let content, filename;
+
+            if (exportFormat === 'JSON') {
+                content = convertToJSON(clipDatas);
+                filename = `clipboard_history_${new Date().toISOString().split('T')[0]}.json`;
+            } else {
+                content = convertToCSV(clipDatas);
+                filename = `clipboard_history_${new Date().toISOString().split('T')[0]}.csv`;
+            }
+
+            // Sauvegarder le fichier
+            const filePath = await saveFile(content, filename);
+            
+            console.log(`Fichier sauvegardé: ${filePath}`);
+            
+            showAlert(
+                'Export réussi',
+                `Vos ${clipDatas.length} clips ont été exportés en ${exportFormat}.\n\nFichier: ${filename}`
+            );
+
+        } catch (error) {
+            console.error('Erreur export:', error);
+            showAlert(
+                'Erreur',
+                'Une erreur est survenue lors de l\'exportation: ' + (error.message || 'Erreur inconnue')
+            );
+        } finally {
+            if (isMounted.current) {
+                setIsExporting(false);
+            }
+        }
     };
 
     return (
         <View style={styles.container}>
             <Header 
-                title="Export de l'Historique" 
+                title="Export" 
                 onBack={onBack}
             />
 
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                {/* Recherche et Filtres */}
-                {/* <View style={styles.searchRow}>
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Rechercher..."
-                        placeholderTextColor={theme.textSecondary}
-                    />
-                    <TouchableOpacity style={styles.filterButton}>
-                        <Icon name="server-outline" size={16} color={theme.iconSecondary} />
-                        <Text style={styles.filterText}>Source: system system</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.filterButton}>
-                        <Icon name="calendar-outline" size={16} color={theme.iconSecondary} />
-                        <Text style={styles.filterText}>24/11/2025</Text>
-                    </TouchableOpacity>
-                </View> */}
-
-                {/* Format et Contenu */}
                 <Text style={styles.sectionTitle}>Format et Contenu</Text>
                 <View style={styles.formatSelector}>
                     <TouchableOpacity 
@@ -176,11 +232,9 @@ const ExportHistoryScreen = ({ onBack }) => {
                     </TouchableOpacity>
                 </View>
                 
-                {/* Format de Filler (Non implémenté) */}
                 <Text style={styles.sectionTitle}>Autres</Text>
-                {/* Basculer les métadonnées */}
                 <View style={[styles.settingRow, styles.switchRow]}>
-                    <Text style={styles.label}>Inclure la source et la  date </Text>
+                    <Text style={styles.label}>Inclure la source et la date</Text>
                     <Switch
                         value={includeMetadata}
                         onValueChange={setIncludeMetadata}
@@ -188,14 +242,22 @@ const ExportHistoryScreen = ({ onBack }) => {
                         thumbColor={theme.cardBackground}
                     />
                 </View>
-
             </ScrollView>
 
-            {/* Bouton d'export fixe */}
             <View style={styles.exportButtonContainer}>
-                <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
-                    <Icon name="download-outline" size={24} color={theme.cardBackground} />
-                    <Text style={styles.exportButtonText}>Exporter l'historique complet ({exportFormat})</Text>
+                <TouchableOpacity 
+                    style={[styles.exportButton, isExporting && styles.exportButtonDisabled]}
+                    onPress={handleExport}
+                    disabled={isExporting}
+                >
+                    <Icon 
+                        name={isExporting ? "hourglass-outline" : "download-outline"} 
+                        size={24} 
+                        color={theme.cardBackground} 
+                    />
+                    <Text style={styles.exportButtonText}>
+                        {isExporting ? 'Export en cours...' : `Exporter l'historique complet (${exportFormat})`}
+                    </Text>
                 </TouchableOpacity>
             </View>
         </View>
